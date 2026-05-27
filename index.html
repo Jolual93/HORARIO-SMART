@@ -179,7 +179,7 @@ table.sched td.cov-warn{background:rgba(245,158,11,.05);border-color:rgba(245,15
 .shift-hrs{font-size:9px;color:var(--t3);font-family:'DM Mono',monospace}
 .shift-rest{color:var(--rest);font-size:11px;font-weight:700;text-align:center;padding:4px;cursor:pointer}
 .shift-rest:hover{opacity:.7}
-.shift-off{color:var(--t4);font-size:10px;text-align:center;padding:4px}
+.shift-off{color:var(--t4);font-size:14px;text-align:center;padding:4px;transition:color .13s}.shift-off:hover{color:var(--t2)}
 .day-total-row td{background:#111;border:1px solid var(--b2);padding:3px 6px;font-size:9px;color:var(--t3);font-family:'DM Mono',monospace;text-align:center}
 .day-total-row td.label{text-align:left;color:var(--t2);font-weight:600}
 /* cov warning in general */
@@ -341,7 +341,10 @@ table.sched td.cov-warn{background:rgba(245,158,11,.05);border-color:rgba(245,15
       </div>
       <div id="nosel" class="nosel">
         <svg width="36" height="36" fill="none" stroke="currentColor" stroke-width="1.3" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>
-        <p>Selecciona un trabajador del panel</p>
+        <p>Selecciona un trabajador del panel izquierdo</p>
+        <p style="font-size:11px;color:var(--t3);max-width:260px;text-align:center;line-height:1.6">
+          Haz clic en el nombre de un trabajador para ver y asignar su horario semanal
+        </p>
       </div>
       <div id="egw" class="gw" style="display:none">
         <table class="sched"><thead><tr>
@@ -593,6 +596,12 @@ function buildGen(){
     wrap.innerHTML=`<div style="padding:40px;text-align:center;color:var(--t4);font-size:13px">${emps.length?"Sin trabajadores en esta área.":"Agrega trabajadores para ver el horario."}</div>`;
     return;
   }
+  // Hint bar
+  const hint=document.createElement("div");
+  hint.style.cssText="background:rgba(204,17,17,.07);border:1px solid rgba(204,17,17,.2);border-radius:7px;padding:8px 14px;margin-bottom:10px;font-size:11px;color:var(--t2);display:flex;align-items:center;gap:8px";
+  hint.innerHTML=`<svg width="14" height="14" fill="none" stroke="var(--cw-red)" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 8v4m0 4h.01"/></svg>
+    <span>Vista de resumen semanal. Para <strong style="color:var(--t1)">asignar turnos</strong>: haz clic en el nombre del trabajador o usa el botón <strong style="color:var(--cw-red)">→ Asignar</strong> en cada fila.</span>`;
+  wrap.appendChild(hint);
   const tbl=document.createElement("table"); tbl.className="gsched";
   const thead=document.createElement("thead");
   const hrow=document.createElement("tr");
@@ -617,8 +626,9 @@ function buildGen(){
     aEmps.forEach(emp=>{
       const tr=document.createElement("tr");
       const ntd=document.createElement("td"); ntd.className="emp-nc";
-      ntd.innerHTML=`<div class="ename-main" style="color:${areaColors[area]}" onclick="selId='${emp.id}';buildSidebar();setView('e')">${emp.name}</div>
-        <div class="ename-sub">${emp.type} · ${emp.h}h${emp.wage?" · S/."+(emp.h*emp.wage).toFixed(0):""}</div>`;
+      ntd.innerHTML=`<div class="ename-main" style="color:${areaColors[area]};cursor:pointer" onclick="selId='${emp.id}';buildSidebar();setView('e')">${emp.name}</div>
+        <div class="ename-sub">${emp.type} · ${emp.h}h${emp.wage?" · S/."+(emp.h*emp.wage).toFixed(0):""}</div>
+        <button onclick="selId='${emp.id}';buildSidebar();setView('e')" style="margin-top:4px;padding:2px 8px;font-size:9px;font-weight:600;background:rgba(204,17,17,.15);color:var(--cw-red);border:1px solid rgba(204,17,17,.3);border-radius:4px;cursor:pointer;font-family:'DM Sans',sans-serif;transition:all .13s" onmouseover="this.style.background='rgba(204,17,17,.3)'" onmouseout="this.style.background='rgba(204,17,17,.15)'">→ Asignar turno</button>`;
       tr.appendChild(ntd);
       DAYS_BASE.forEach(d=>{
         const td=document.createElement("td");
@@ -637,9 +647,9 @@ function buildGen(){
           </div>`;
           td.oncontextmenu=e=>{e.preventDefault();toggleBreak(emp,`${d}-${HOURS[0]}`);};
         } else {
-          // show rest button on hover via title
-          td.innerHTML=`<div class="shift-off" title="Clic derecho = marcar descanso">—</div>`;
+          td.innerHTML=`<div class="shift-off" style="cursor:pointer" title="Clic = ir a asignar · Clic derecho = marcar descanso" onclick="selId='${emp.id}';buildSidebar();setView('e')">+</div>`;
           td.oncontextmenu=e=>{e.preventDefault();toggleRest(emp,d);};
+          td.style.cursor="pointer";
         }
         // coverage warning highlight
         const warns=getCovWarnings(); if(warns.find(w=>w.day===d)) td.classList.add("cov-w");
