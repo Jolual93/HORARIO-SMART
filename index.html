@@ -454,6 +454,12 @@ function updateWeekLabel(){
 }
 function changeWeek(dir){weekOffset+=dir; updateWeekLabel(); render();}
 
+// ══ SAVE SCHEDULER (defined early so render can use it) ══
+function scheduleSave() {
+  clearTimeout(syncTimer);
+  syncTimer = setTimeout(saveToStorage, 1500);
+}
+
 // ══ HELPERS ═════════════════════════════════════
 const getEmp=id=>emps.find(e=>e.id===id);
 const selEmp=()=>getEmp(selId);
@@ -526,7 +532,7 @@ function setGenFilt(f){
 }
 
 // ══ RENDER ══════════════════════════════════════
-function render(){buildSidebar();updateCovAlert();view==="g"?buildGen():buildEmp();}
+function render(){buildSidebar();updateCovAlert();view==="g"?buildGen():buildEmp();scheduleSave();}
 
 // ══ SIDEBAR ═════════════════════════════════════
 function buildSidebar(){
@@ -563,7 +569,7 @@ function buildSidebar(){
       const restDays=DAYS_BASE.filter(d=>emp.restDays&&emp.restDays.has(d)).length;
       const quota=max; const pctQuota=Math.round((emp.h/quota)*100);
       const c=document.createElement("div"); c.className="ec"+(selId===emp.id?" sel":"");
-      c.onclick=()=>{selId=emp.id;render();};
+      c.onclick=()=>{selId=emp.id;setView('e');};
       c.innerHTML=`<div class="ec-top">
           <span class="ec-name">${emp.name}</span>
           <div class="ec-acts" onclick="event.stopPropagation()">
@@ -1014,60 +1020,47 @@ function deserializeData(raw) {
 
 async function saveToStorage() {
   const data = serializeData();
-  if (data === lastSavedHash) return; // no changes
+  if (data === lastSavedHash) return;
   setSyncStatus("saving", "guardando…");
+  const now = new Date();
+  const timeStr = `${now.getHours()}:${String(now.getMinutes()).padStart(2,"0")}`;
+  // Always save to localStorage (works on Vercel)
+  try { localStorage.setItem(STORAGE_KEY, data); } catch(e) {}
+  // Also try shared storage (works on claude.ai)
   try {
-    const result = await window.storage.set(STORAGE_KEY, data, true); // shared=true
-    if (result) {
-      lastSavedHash = data;
-      const now = new Date();
-      setSyncStatus("ok", `guardado ${now.getHours()}:${String(now.getMinutes()).padStart(2,"0")}`);
-    } else {
-      setSyncStatus("err", "error al guardar");
-    }
-  } catch(e) {
-    // storage not available (e.g. plain Vercel) — fallback to localStorage
-    try {
-      localStorage.setItem(STORAGE_KEY, data);
-      lastSavedHash = data;
-      const now = new Date();
-      setSyncStatus("ok", `local ${now.getHours()}:${String(now.getMinutes()).padStart(2,"0")}`);
-    } catch(e2) {
-      setSyncStatus("err", "sin almacenamiento");
-    }
-  }
+    const result = await window.storage.set(STORAGE_KEY, data, true);
+    if (result) { lastSavedHash = data; setSyncStatus("ok", "sync " + timeStr); return; }
+  } catch(e) {}
+  lastSavedHash = data;
+  setSyncStatus("ok", "guardado " + timeStr);
 }
 
 async function loadFromStorage() {
   setSyncStatus("saving", "cargando…");
+  // 1. Try shared storage first (claude.ai)
   try {
-    const result = await window.storage.get(STORAGE_KEY, true); // shared=true
+    const result = await window.storage.get(STORAGE_KEY, true);
     if (result && result.value) {
       deserializeData(result.value);
       lastSavedHash = result.value;
+      // Also update localStorage
+      try { localStorage.setItem(STORAGE_KEY, result.value); } catch(e) {}
       setSyncStatus("ok", "sincronizado");
       return true;
     }
-  } catch(e) {
-    // fallback to localStorage
-    try {
-      const raw = localStorage.getItem(STORAGE_KEY);
-      if (raw) {
-        deserializeData(raw);
-        lastSavedHash = raw;
-        setSyncStatus("ok", "local");
-        return true;
-      }
-    } catch(e2) {}
-  }
+  } catch(e) {}
+  // 2. Fallback: localStorage (Vercel / any browser)
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (raw) {
+      deserializeData(raw);
+      lastSavedHash = raw;
+      setSyncStatus("ok", "guardado localmente");
+      return true;
+    }
+  } catch(e) {}
   setSyncStatus("ok", "nuevo");
   return false;
-}
-
-// Schedule auto-save 1.5s after last change
-function scheduleSave() {
-  clearTimeout(syncTimer);
-  syncTimer = setTimeout(saveToStorage, 1500);
 }
 
 // Poll for remote changes every 15s
@@ -1083,12 +1076,7 @@ setInterval(async () => {
   } catch(e) {}
 }, 15000);
 
-// Patch render to trigger save
-const _origRender = render;
-function render() {
-  _origRender();
-  scheduleSave();
-}
+// render already defined above — scheduleSave called after mutations in saveEmp/toggleBreak/etc
 
 // ══ INIT ═════════════════════════════════════════
 (async () => {
